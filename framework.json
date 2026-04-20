@@ -1,0 +1,7 @@
+{
+  "name": "CMakeModules",
+  "type": "custom",
+  "version": "0.1.0",
+  "description": "CMake modules for InfraUtilities",
+  "dependencies": []
+}
