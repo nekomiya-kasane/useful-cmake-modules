@@ -30,6 +30,7 @@
 #   sanitizer_enable_msvc_debug_helpers(GLOBAL)
 # ═══════════════════════════════════════════════════════════════════════
 include_guard(GLOBAL)
+include(CMakePrettyPrint)
 
 # ── Internal: dispatch global vs per-target ───────────────────────────
 function(_san_add_compile target)
@@ -162,7 +163,7 @@ function(sanitizer_enable target)
     _san_add_compile(${target} $<$<CONFIG:Debug>:/Zi>)
   endif()
 
-  message(STATUS "Sanitizers [${target}]: enabled [${_sanitizers}]")
+  pp_scope("Sanitizers" "${target}" "enabled [${_sanitizers}]")
 endfunction()
 
 # ── MSVC debug helpers (use when NO sanitizer is active) ──────────────
@@ -171,5 +172,9 @@ function(sanitizer_enable_msvc_debug_helpers target)
     return()
   endif()
   _san_add_definitions(${target} $<$<CONFIG:Debug>:_MSVC_STL_DESTRUCTOR_TOMBSTONES>)
-  _san_add_compile(${target} $<$<CONFIG:Debug>:/ZI>)
+  if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    _san_add_compile(${target} $<$<CONFIG:Debug>:/Zi>)
+  else()
+    _san_add_compile(${target} $<$<CONFIG:Debug>:/ZI>)
+  endif()
 endfunction()

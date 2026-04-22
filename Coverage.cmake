@@ -27,6 +27,7 @@
 #   coverage_add_report(NAME coverage TARGETS my_test EXCLUDE "thirdparty/*")
 # ═══════════════════════════════════════════════════════════════════════
 include_guard(GLOBAL)
+include(CMakePrettyPrint)
 
 # ── Internal: dispatch global vs per-target ───────────────────────────
 function(_cov_add_compile target)
@@ -64,11 +65,11 @@ function(coverage_enable target)
   if(CLANG)
     _cov_add_compile(${target} -fprofile-instr-generate -fcoverage-mapping)
     _cov_add_link(${target} -fprofile-instr-generate -fcoverage-mapping)
-    message(STATUS "Coverage [${target}]: enabled (Clang source-based)")
+    pp_scope("Coverage" "${target}" "enabled (Clang source-based)")
   elseif(GCC)
     _cov_add_compile(${target} --coverage -fprofile-arcs -ftest-coverage)
     _cov_add_link(${target} --coverage)
-    message(STATUS "Coverage [${target}]: enabled (GCC gcov)")
+    pp_scope("Coverage" "${target}" "enabled (GCC gcov)")
   else()
     message(WARNING "coverage_enable [${target}]: unsupported compiler ${CMAKE_CXX_COMPILER_ID}")
   endif()
@@ -137,7 +138,7 @@ function(coverage_add_report)
       DEPENDS ${COV_TARGETS}
       VERBATIM
     )
-    message(STATUS "Coverage report target '${COV_NAME}' created (llvm-cov)")
+    pp_scope("Coverage" "${COV_NAME}" "report target created (llvm-cov)")
 
   elseif(GCC)
     # ── gcovr workflow ──────────────────────────────────────────────
@@ -175,7 +176,7 @@ function(coverage_add_report)
       DEPENDS ${COV_TARGETS}
       VERBATIM
     )
-    message(STATUS "Coverage report target '${COV_NAME}' created (gcovr)")
+    pp_scope("Coverage" "${COV_NAME}" "report target created (gcovr)")
 
   else()
     message(WARNING "coverage_add_report: unsupported compiler, "

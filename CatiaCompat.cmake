@@ -16,6 +16,7 @@
 #   catia_enable_compat(my_catia_plugin)
 # ═══════════════════════════════════════════════════════════════════════
 include_guard(GLOBAL)
+include(CMakePrettyPrint)
 
 # ── Internal: dispatch global vs per-target ───────────────────────────
 function(_catia_add_definitions target)
@@ -32,7 +33,7 @@ endfunction()
 
 # ── Public API ────────────────────────────────────────────────────────
 function(catia_enable_compat target)
-  message(STATUS "CatiaCompat [${target}]: enabling CATIA compatibility defines")
+  pp_scope("CatiaCompat" "${target}" "enabling CATIA compatibility defines")
 
   # Endianness (required by CATIA SDK)
   include(TestBigEndian)

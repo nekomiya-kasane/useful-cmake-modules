@@ -17,6 +17,7 @@
 #   CatiaCompat.cmake — CATIA/3DEXPERIENCE platform defines (opt-in)
 # ═══════════════════════════════════════════════════════════════════════
 include_guard(GLOBAL)
+include(TestToolchains)
 
 # ── 1. Cache options ──────────────────────────────────────────────────
 set(BUILD_CHECK_LEVEL 2 CACHE STRING "Warning strictness level (1-4)")
@@ -25,8 +26,6 @@ if(NOT BUILD_CHECK_LEVEL)
 endif()
 
 option(SHOW_INCLUDE_TREE "Show include tree during compilation"   OFF)
-
-message(STATUS "BUILD_CHECK_LEVEL = ${BUILD_CHECK_LEVEL}")
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
@@ -46,14 +45,21 @@ endif()
 
 # ── 4. Compiler warnings ─────────────────────────────────────────────
 if(MSVC)
-  # Conformance & encoding
+  # Conformance & encoding (shared by cl.exe and clang-cl)
   add_compile_options(
     "$<$<COMPILE_LANGUAGE:C,CXX>:/Zc:__cplusplus>"
     "$<$<COMPILE_LANGUAGE:C,CXX>:/utf-8>"
     "$<$<COMPILE_LANGUAGE:C,CXX>:/validate-charset>"
     "$<$<COMPILE_LANGUAGE:C,CXX>:/permissive->"
   )
-  # Warning level derived from BUILD_CHECK_LEVEL
+  # Include tree
+  if(SHOW_INCLUDE_TREE)
+    add_compile_options(/showIncludes)
+  endif()
+endif()
+
+if(COMPILER_MSVC)
+  # Warning level derived from BUILD_CHECK_LEVEL (cl.exe only)
   math(EXPR _wlevel "${BUILD_CHECK_LEVEL} - 1")
   add_compile_options(
     "$<$<COMPILE_LANGUAGE:C,CXX>:/W${_wlevel}>"
@@ -73,18 +79,31 @@ if(MSVC)
   add_compile_options(
     "$<$<COMPILE_LANGUAGE:C,CXX>:/wd4297>"   # function assumed not to throw
   )
-  # Include tree
-  if(SHOW_INCLUDE_TREE)
-    add_compile_options(/showIncludes)
-  endif()
+endif()
 
-elseif(CLANG)
-  # Diagnostics
+if(CLANG)
+  # Diagnostics (clang-cl only supports -fcolor-diagnostics; the others are clang++ only)
+  add_compile_options(-fcolor-diagnostics)
+  if(NOT CLANG_CL)
+    add_compile_options(
+      -fcaret-diagnostics
+      -fdiagnostics-show-category=name
+      -fdiagnostics-show-template-tree
+    )
+  endif()
+  # Suppress noisy compatibility / style warnings (not actionable in a C++23 codebase)
   add_compile_options(
-    -fcolor-diagnostics
-    -fcaret-diagnostics
-    -fdiagnostics-show-category=name
-    -fdiagnostics-show-template-tree
+    -Wno-c++98-compat
+    -Wno-c++98-compat-pedantic
+    -Wno-pre-c++14-compat
+    -Wno-pre-c++17-compat
+    -Wno-pre-c++20-compat
+    -Wno-padded
+    -Wno-global-constructors
+    -Wno-exit-time-destructors
+    -Wno-unsafe-buffer-usage
+    -Wno-covered-switch-default
+    -Wno-switch-enum
   )
   # Level 4: treat all warnings as errors
   if(BUILD_CHECK_LEVEL EQUAL 4)
@@ -112,6 +131,8 @@ elseif(CLANG)
       -Wno-unused-parameter
       -Wno-error=sign-compare
       -Wno-missing-designated-field-initializers
+      -Wno-unused-local-typedef
+      -Wno-used-but-marked-unused
     )
   endif()
   # Level 3: exhaustive error promotions
@@ -262,7 +283,7 @@ add_compile_definitions(
   $<$<NOT:$<CONFIG:Debug>>:NDEBUG>
 )
 
-if(MSVC)
+if(COMPILER_MSVC)
   add_compile_options(
     $<$<CONFIG:Debug>:/JMC>
     $<$<CONFIG:Debug>:/Od>
@@ -291,3 +312,58 @@ binary_enable_default_binary_layout(GLOBAL)
 include(Coverage)
 include(Sanitizers)
 sanitizer_enable_msvc_debug_helpers(GLOBAL)
+
+# ── 8. Configuration summary ──────────────────────────────────────────
+include(CMakePrettyPrint)
+
+# Derive human-readable strings for the summary table.
+if(COMPILER_MSVC)
+  set(_warn_strategy "W${_wlevel} + WX + promoted (${BUILD_CHECK_LEVEL})")
+elseif(CLANG)
+  if(BUILD_CHECK_LEVEL EQUAL 4)
+    set(_warn_strategy "Werror=all (level 4)")
+  elseif(BUILD_CHECK_LEVEL EQUAL 3)
+    set(_warn_strategy "exhaustive promotions (level 3)")
+  else()
+    set(_warn_strategy "core promotions (level ${BUILD_CHECK_LEVEL})")
+  endif()
+else()
+  set(_warn_strategy "GCC defaults (level ${BUILD_CHECK_LEVEL})")
+endif()
+
+if(SHOW_INCLUDE_TREE)
+  set(_inc_tree "ON")
+else()
+  set(_inc_tree "OFF")
+endif()
+
+string(LENGTH "${CMAKE_CXX_COMPILER}" _comp_path_len)
+if(_comp_path_len GREATER 50)
+  string(REGEX REPLACE "^.*[/\\\\]" "" _compiler_short "${CMAKE_CXX_COMPILER}")
+else()
+  set(_compiler_short "${CMAKE_CXX_COMPILER}")
+endif()
+
+pp_table_begin("Build Configuration" COLUMNS 22 42)
+pp_table_row("Compiler"            "${CMAKE_CXX_COMPILER_ID} ${COMPILER_VERSION}")
+pp_table_row("Compiler binary"     "${_compiler_short}")
+pp_table_row("C++ standard"        "${CMAKE_CXX_STANDARD}")
+pp_table_row("Platform"            "${CMAKE_SYSTEM_NAME} (${HOST_ARCH}, ${HOST_BITS}-bit)")
+pp_table_row("Build type"          "${CMAKE_BUILD_TYPE}")
+pp_table_sep()
+pp_table_row("Warning level"       "BUILD_CHECK_LEVEL = ${BUILD_CHECK_LEVEL}")
+pp_table_row("Warning strategy"    "${_warn_strategy}")
+pp_table_row("Include tree"        "${_inc_tree}")
+pp_table_row("PIC"                 "${CMAKE_POSITION_INDEPENDENT_CODE}")
+pp_table_sep()
+pp_table_row("MSVC"                "${COMPILER_MSVC}")
+pp_table_row("Clang"               "${COMPILER_CLANG}")
+pp_table_row("Apple Clang"         "${COMPILER_APPLE_CLANG}")
+pp_table_row("GCC"                 "${COMPILER_GCC}")
+pp_table_row("Intel LLVM"          "${COMPILER_INTEL_LLVM}")
+pp_table_row("Clang-CL"            "${CLANG_CL}")
+pp_table_sep()
+pp_table_row("BinaryLayout"        "included")
+pp_table_row("Coverage"            "included")
+pp_table_row("Sanitizers"          "included")
+pp_table_end()
