@@ -104,6 +104,9 @@ if(CLANG)
     -Wno-unsafe-buffer-usage
     -Wno-covered-switch-default
     -Wno-switch-enum
+    -Wno-missing-prototypes             # C-only concept; C++ requires declaration before use
+    -Wno-nonportable-system-include-path # Windows path case sensitivity; not actionable
+    -Wno-newline-eof                     # trailing newline; enforced by clang-format
   )
   # Level 4: treat all warnings as errors
   if(BUILD_CHECK_LEVEL EQUAL 4)
